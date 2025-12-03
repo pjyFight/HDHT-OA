@@ -153,6 +153,15 @@ class TestCommAndTopologyHelpers:
         with pytest.raises(RuntimeError):
             transformer_utils.get_num_layers_and_offset(config)
 
+    @pytest.mark.level0
+    def test_get_num_layers_and_offset_invalid_offset_shape(self, monkeypatch):
+        monkeypatch.setattr(transformer_utils, "get_pipeline_model_parallel_world_size", lambda: 2)
+
+        config = TransformerConfig(num_layers=6, offset=[1, 0, 0])
+
+        with pytest.raises(ValueError):
+            transformer_utils.get_num_layers_and_offset(config)
+
 
 class TestMathHelpers:
     """Tests for small math helpers."""
@@ -177,4 +186,55 @@ class TestCustomOpsToggle:
         monkeypatch.setitem(sys.modules, "ms_custom_ops", SimpleNamespace(), raising=False)
         monkeypatch.setattr(transformer_utils, "is_310p", lambda: False)
         assert transformer_utils.use_ms_custom_ops() is True
+
+    @pytest.mark.level0
+    def test_use_ms_custom_ops_false_when_310p(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "ms_custom_ops", SimpleNamespace(), raising=False)
+        monkeypatch.setattr(transformer_utils, "is_310p", lambda: True)
+        assert transformer_utils.use_ms_custom_ops() is False
+
+
+class TestParameterUtility:
+    """Covers helpers related to parameter creation."""
+
+    @pytest.mark.level0
+    def test_create_empty_parameter_returns_expected_shape(self):
+        param = transformer_utils.create_empty_parameter((2, 3), dtype=mstype.float32, name="dummy")
+        assert param.shape == (2, 3)
+        assert param.dtype == mstype.float32
+
+
+class TestWorldSizeFallbacks:
+    """Ensure fallback logic returns non-zero defaults."""
+
+    @pytest.mark.level0
+    def test_world_size_helpers_default_to_one(self, monkeypatch):
+        monkeypatch.setattr(transformer_utils, "get_tensor_model_parallel_world_size", lambda: 0)
+        monkeypatch.setattr(transformer_utils, "get_moe_tensor_parallel_world_size", lambda: 0)
+        monkeypatch.setattr(transformer_utils, "get_moe_expert_parallel_world_size", lambda: 0)
+        monkeypatch.setattr(transformer_utils, "get_data_parallel_world_size", lambda: 0)
+
+        assert transformer_utils.get_tp_world_size() == 1
+        assert transformer_utils.get_moe_tp_world_size() == 1
+        assert transformer_utils.get_moe_ep_world_size() == 1
+        assert transformer_utils.get_dp_world_size() == 1
+
+
+class TestPaddingIndexGeneration:
+    """Tests for generate_padding_index helper."""
+
+    @pytest.mark.level0
+    def test_generate_padding_index_single_dp(self, monkeypatch):
+        monkeypatch.setattr(transformer_utils, "get_tensor_model_parallel_world_size", lambda: 1)
+        monkeypatch.setattr(transformer_utils, "get_data_parallel_world_size", lambda: 1)
+        monkeypatch.setattr(transformer_utils, "get_data_parallel_group",
+                            lambda: SimpleNamespace(rank=0, group=None))
+
+        q_seq_lens = Tensor(np.array([[2]], dtype=np.int32))
+        attn_pad, attn_unpad, ffn_pad, ffn_unpad = transformer_utils.generate_padding_index(q_seq_lens)
+
+        assert attn_pad.shape == (2,)
+        assert attn_unpad.shape == (2,)
+        assert ffn_pad.shape == (2,)
+        assert ffn_unpad.shape == (2,)
 
