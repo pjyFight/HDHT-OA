@@ -5,6 +5,7 @@ from enum import Enum
 class MindFormerModuleType(str, Enum):
     """Available registry module types."""
     CONFIG = "config"
+    MODELS = "models"
 
 
 class MindFormerRegister:
