@@ -3,9 +3,11 @@ from dataclasses import dataclass
 
 
 @dataclass
-class _ParallelGroup:
+class ProcessGroup:
+    """Represents a parallel process group."""
     group: str | None = None
     rank: int = 0
+    size: int = 1
 
 
 _tensor_model_parallel_world_size = 1
@@ -14,7 +16,7 @@ _moe_expert_parallel_world_size = 1
 _moe_tensor_parallel_world_size = 1
 _pipeline_model_parallel_world_size = 1
 _pipeline_model_parallel_rank = 0
-_data_parallel_group = _ParallelGroup()
+_data_parallel_group = ProcessGroup()
 
 
 def set_parallel_sizes(
